@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/nixonyh/lenz"
+
+[workspace.dependencies]
+lenz_macros = { version = "0.1.0", path = "crates/lenz_macros" }
+
+[workspace.lints.clippy]
+redundant_type_annotations = "warn"
