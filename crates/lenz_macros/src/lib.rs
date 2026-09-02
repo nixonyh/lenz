@@ -13,6 +13,10 @@ use syn::{DeriveInput, parse_macro_input};
 /// A field marked `#[lenz(ignore)]` gets no marker and no cursor
 /// method, so nothing can name a path to it.
 ///
+/// A field marked `#[lenz(tag = <path>)]` also implements `Tagged` on
+/// its marker, with `<path>` as the tag type. `lenz` does not inspect
+/// `<path>`.
+///
 /// `#[lenz(crate = ::path::to::lenz)]` on the struct overrides where
 /// the generated code looks for the `lenz` crate - for a struct built
 /// by a macro in another crate that only re-exports `lenz`.

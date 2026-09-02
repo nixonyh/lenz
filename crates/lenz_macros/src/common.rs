@@ -188,6 +188,30 @@ pub fn ignored(field: &syn::Field) -> bool {
     })
 }
 
+/// The type named by `#[lenz(tag = <path>)]`, spliced into a
+/// `type Tag` as written.
+pub fn tag(field: &syn::Field) -> syn::Result<Option<syn::Path>> {
+    let mut tag = None;
+
+    for attr in &field.attrs {
+        if !attr.path().is_ident("lenz") {
+            continue;
+        }
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("tag") {
+                tag = Some(meta.value()?.parse::<syn::Path>()?);
+                Ok(())
+            } else if meta.path.is_ident("ignore") {
+                Ok(()) // handled by `ignored`
+            } else {
+                Err(meta.error("expected `tag = <path>` or `ignore`"))
+            }
+        })?;
+    }
+
+    Ok(tag)
+}
+
 pub fn snake_case(ident: &Ident) -> String {
     let name = ident.to_string();
     let mut out = String::with_capacity(name.len() + 4);

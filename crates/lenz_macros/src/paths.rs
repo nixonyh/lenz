@@ -4,7 +4,7 @@ use syn::DeriveInput;
 
 use crate::common::{
     generics, ignored, lenz_root, named_fields, option_inner,
-    snake_case,
+    snake_case, tag,
 };
 
 pub fn expand(ast: &DeriveInput) -> syn::Result<TokenStream2> {
@@ -101,6 +101,18 @@ pub fn expand(ast: &DeriveInput) -> syn::Result<TokenStream2> {
                 }
             }
         });
+
+        // A tagged field carries its tag on the marker.
+        if let Some(tag) = tag(field)? {
+            impls.push(quote! {
+                impl<#decl> #lenz::Tagged
+                    for #path_mod::#field_name #ty
+                #bounds
+                {
+                    type Tag = #tag;
+                }
+            });
+        }
 
         let step =
             quote!(#lenz::Chain<P, #path_mod::#field_name #ty>);
