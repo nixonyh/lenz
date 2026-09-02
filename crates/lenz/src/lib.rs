@@ -113,6 +113,21 @@ where
     }
 }
 
+/// A path whose terminal hop carries a `Tag`, an opaque type set on
+/// the field's marker by `#[lenz(tag = ...)]`. A [`Chain`] takes its
+/// last hop's tag, so a walk exposes the tag of the field it ends on.
+pub trait Tagged: FieldPath {
+    type Tag;
+}
+
+impl<A, B> Tagged for Chain<A, B>
+where
+    A: FieldPath,
+    B: FieldPath<Source = A::Target> + Tagged,
+{
+    type Tag = B::Tag;
+}
+
 /// Where the walk is standing. Carries the path so far as `P`,
 /// nothing at runtime.
 ///

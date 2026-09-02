@@ -6,46 +6,59 @@
 [![CI](https://github.com/nixonyh/lenz/workflows/CI/badge.svg)](https://github.com/nixonyh/lenz/actions)
 [![Discord](https://img.shields.io/discord/442334985471655946.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/Mhnyp6VYEQ)
 
-**Lenz** builds typed, composable paths to the fields of a struct. A
-path is a *type*, not a value: zero-sized, collapsing to a pair of
-plain function pointers, with a hop through an `Option` field just
-another link rather than a separate kind of path.
+**Lenz** turns a path to a deeply nested field into a reusable handle
+you pass around and use later to read or write it. Paths live in the
+type system, checked at compile time, zero-cost at runtime.
 
-## Quick Start
+## Example
 
 ```rust
-use lenz::Lenz;
+use lenz::{Cursor, Lenz, Tagged};
+
+// A tag type. `lenz` only carries it; a downstream crate attaches the
+// meaning (say, "how to write this field to a backend").
+pub struct SetText;
 
 #[derive(Lenz)]
-pub struct Card {
-    pub header: Header,
-}
-
-#[derive(Lenz)]
-pub struct Header {
-    pub badge: Option<Badge>,
-}
-
-#[derive(Lenz)]
-pub struct Badge {
-    pub icon: Icon,
-}
-
-#[derive(Lenz)]
-pub struct Icon {
+pub struct Label {
+    #[lenz(tag = SetText)]
+    pub text: String,
     pub size: u32,
 }
 
-let card = Card {
-    header: Header {
-        badge: Some(Badge { icon: Icon { size: 12 } }),
-    },
+#[derive(Lenz)]
+pub struct Button {
+    pub label: Label,
+    pub icon: Option<Label>,
+    #[lenz(ignore)]
+    pub pressed: bool,
+}
+
+let mut button = Button {
+    label: Label { text: "Save".into(), size: 14 },
+    icon: None,
+    pressed: false,
 };
 
-// Walk from the root to a nested field.
-let size = Card::cursor().header().badge().icon().size().accessor();
+// Walk from the root to a nested field. Each `.field()` adds a hop;
+// the `Option` on `icon` is just another link.
+let text = Button::cursor().label().text();
 
-assert_eq!(size.get(&card), Some(&12));
+// `.accessor()` ends the walk: two `fn` pointers, `Copy`, no alloc.
+let acc = text.accessor();
+assert_eq!(acc.get(&button).map(String::as_str), Some("Save"));
+*acc.get_mut(&mut button).unwrap() = "Saved".into();
+
+// A walk through an absent `Option` returns `None`, never panics.
+let icon_text = Button::cursor().icon().text().accessor();
+assert_eq!(icon_text.get(&button), None);
+
+// `.hops()` lists the links; `.key()` names the whole walk.
+assert_eq!(Button::cursor().label().text().hops().len(), 2);
+
+// `text` is tagged, so its path carries `SetText` as its `Tag`.
+fn writes_text<P: Tagged<Tag = SetText>>(_: Cursor<P>) {}
+writes_text(Button::cursor().label().text());
 ```
 
 ## How it works
@@ -56,53 +69,36 @@ marker and a `{Struct}Cursor` method that walks to it.
 chains another link, and the `B::Source == A::Target` bound rejects a
 mismatched join at compile time.
 
-End a walk one of three ways:
+End a walk one of these ways:
 
-- **`.accessor()`** collapses the path into an `Accessor<S, T>`: two
+- **`.accessor()`**: collapses the path into an `Accessor<S, T>` - two
   `fn` pointers, `Copy`, no allocation. `get` / `get_mut` return an
-  `Option`, `None` if any `Option` along the way was absent - so a
+  `Option`, `None` if any `Option` along the way was absent, so a
   caller never has to know which links were optional.
-- **`.key()`** returns one `FieldId` naming the whole walk, distinct
-  from any single hop's id, so `top.text` and `bottom.text` key
-  separately.
-- **`.hops()`** returns a `FieldId` per link, the route a patch
-  follows.
+- **`.key()`**: one `FieldId` naming the whole walk, distinct from any
+  single hop's id, so `top.text` and `bottom.text` key separately.
+- **`.hops()`**: a `FieldId` per link, the route a patch follows.
 
 A `FieldId` wraps the path type's own `TypeId`, so an id can only come
 from a real path.
 
 ## Attributes
 
-### `#[lenz(ignore)]`
+- **`#[lenz(ignore)]`**: the field gets no marker and no cursor
+  method, so nothing can name a path to it.
+- **`#[lenz(tag = <path>)]`**: the field's marker also implements
+  `Tagged`, with `<path>` as the associated `Tag` type. `lenz` never
+  inspects it, and a `Chain` carries the tag of its last hop, so a
+  composed walk exposes the tag of the field it ends on.
+- **`#[lenz(crate = <path>)]`**: on the struct, points the generated
+  code at a re-exported `lenz`, for a struct emitted by another
+  crate's macro:
 
-A field marked `#[lenz(ignore)]` gets no marker and no cursor method,
-so nothing can name a path to it.
-
-```rust
-use lenz::Lenz;
-
-#[derive(Lenz)]
-pub struct Row {
-    pub label: String,
-    #[lenz(ignore)]
-    pub cache: Vec<u8>,
-}
-
-// `Row::cursor().label()` exists; there is no `.cache()`.
-let _ = Row::cursor().label().accessor();
-```
-
-### `#[lenz(crate = <path>)]`
-
-By default the generated code finds the `lenz` crate by name. A struct
-built by a macro in another crate that only re-exports `lenz` can
-point it elsewhere:
-
-```text
-#[derive(Lenz)]
-#[lenz(crate = ::my_framework::lenz)]
-pub struct Generated { /* ... */ }
-```
+  ```text
+  #[derive(Lenz)]
+  #[lenz(crate = ::my_framework::lenz)]
+  pub struct Generated { /* ... */ }
+  ```
 
 ## `no_std`
 
