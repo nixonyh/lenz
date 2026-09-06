@@ -94,7 +94,7 @@ from a real path.
   code at a re-exported `lenz`, for a struct emitted by another
   crate's macro:
 
-  ```text
+  ```rust,ignore
   #[derive(Lenz)]
   #[lenz(crate = ::my_framework::lenz)]
   pub struct Generated { /* ... */ }
