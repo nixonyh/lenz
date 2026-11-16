@@ -20,10 +20,13 @@ use lenz::{Cursor, Lenz, Tagged};
 pub struct SetText;
 
 #[derive(Lenz)]
+pub struct Size(pub u32);
+
+#[derive(Lenz)]
 pub struct Label {
     #[lenz(tag = SetText)]
     pub text: String,
-    pub size: u32,
+    pub size: Size,
 }
 
 #[derive(Lenz)]
@@ -35,7 +38,7 @@ pub struct Button {
 }
 
 let mut button = Button {
-    label: Label { text: "Save".into(), size: 14 },
+    label: Label { text: "Save".into(), size: Size(14) },
     icon: None,
     pressed: false,
 };
@@ -48,6 +51,10 @@ let text = Button::cursor().label().text();
 let acc = text.accessor();
 assert_eq!(acc.get(&button).map(String::as_str), Some("Save"));
 *acc.get_mut(&mut button).unwrap() = "Saved".into();
+
+// A tuple struct's fields are numbered: `_0`, `_1` and on.
+let size = Button::cursor().label().size()._0().accessor();
+assert_eq!(size.get(&button), Some(&14));
 
 // A walk through an absent `Option` returns `None`, never panics.
 let icon_text = Button::cursor().icon().text().accessor();
@@ -68,9 +75,6 @@ marker and a `{Struct}Cursor` method that walks to it.
 `Struct::cursor()` starts a walk at the root; each `.field()` call
 chains another link, and the `B::Source == A::Target` bound rejects a
 mismatched join at compile time.
-
-A tuple struct's fields are walked by number, as `_0`, `_1` and on, so
-a newtype is a path like any other: `Page::cursor()._0()`.
 
 End a walk one of these ways:
 
