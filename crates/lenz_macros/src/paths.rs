@@ -3,17 +3,16 @@ use quote::{format_ident, quote};
 use syn::DeriveInput;
 
 use crate::common::{
-    generics, ignored, lenz_root, named_fields, option_inner,
-    snake_case, tag,
+    fields, generics, ignored, lenz_root, option_inner, snake_case,
+    tag,
 };
 
 pub fn expand(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     let lenz = lenz_root(&ast.attrs)?;
     let name = &ast.ident;
-    let fields: Vec<_> = named_fields(ast)?
-        .iter()
-        .filter(|field| !ignored(field))
-        .cloned()
+    let fields: Vec<_> = fields(ast)?
+        .into_iter()
+        .filter(|path| !ignored(path.field))
         .collect();
 
     let generics = generics(ast)?;
@@ -34,24 +33,25 @@ pub fn expand(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     let mut signatures = Vec::new();
     let mut bodies = Vec::new();
 
-    for field in fields.iter() {
-        let field_name =
-            field.ident.as_ref().expect("named fields checked above");
+    for path in &fields {
+        let field_name = &path.name;
+        let member = &path.member;
+        let field = path.field;
 
         // An `Option<T>` field targets `T`, so the chain short
         // circuits instead of stopping at the `Option`.
         let (target, get, get_mut) = match option_inner(&field.ty) {
             Some(inner) => (
                 inner.clone(),
-                quote!(source.#field_name.as_ref()),
-                quote!(source.#field_name.as_mut()),
+                quote!(source.#member.as_ref()),
+                quote!(source.#member.as_mut()),
             ),
             None => {
                 let ty = &field.ty;
                 (
                     ty.clone(),
-                    quote!(::core::option::Option::Some(&source.#field_name)),
-                    quote!(::core::option::Option::Some(&mut source.#field_name)),
+                    quote!(::core::option::Option::Some(&source.#member)),
+                    quote!(::core::option::Option::Some(&mut source.#member)),
                 )
             }
         };

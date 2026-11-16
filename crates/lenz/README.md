@@ -69,6 +69,9 @@ marker and a `{Struct}Cursor` method that walks to it.
 chains another link, and the `B::Source == A::Target` bound rejects a
 mismatched join at compile time.
 
+A tuple struct's fields are walked by number, as `_0`, `_1` and on, so
+a newtype is a path like any other: `Page::cursor()._0()`.
+
 End a walk one of these ways:
 
 - **`.accessor()`**: collapses the path into an `Accessor<S, T>` - two

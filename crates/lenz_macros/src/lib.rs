@@ -8,7 +8,8 @@ use syn::{DeriveInput, parse_macro_input};
 
 /// Generates the field paths for a struct: a zero-sized `FieldPath`
 /// marker per field, and a `Cursor` method that walks to it. Call
-/// `accessor()` to end the walk.
+/// `accessor()` to end the walk. A tuple struct's fields are walked
+/// as `_0`, `_1` and on.
 ///
 /// A field marked `#[lenz(ignore)]` gets no marker and no cursor
 /// method, so nothing can name a path to it.
