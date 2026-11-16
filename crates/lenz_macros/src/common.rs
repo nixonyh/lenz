@@ -1,12 +1,10 @@
-use std::borrow::Cow;
-
 use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
-use syn::punctuated::Punctuated;
+use quote::{format_ident, quote};
 use syn::{
-    Attribute, Data, DeriveInput, Fields, GenericArgument,
-    GenericParam, Ident, PathArguments, Type, WhereClause,
+    Attribute, Data, DeriveInput, Field, GenericArgument,
+    GenericParam, Ident, Index, Member, PathArguments, Type,
+    WhereClause,
 };
 
 /// A struct's generics, in the pieces the derive splices.
@@ -96,24 +94,41 @@ fn predicates(
     }
 }
 
-/// A struct's named fields, of which a unit struct has none.
-pub fn named_fields(
-    ast: &DeriveInput,
-) -> syn::Result<Cow<'_, Punctuated<syn::Field, syn::Token![,]>>> {
-    match &ast.data {
-        Data::Struct(data) => match &data.fields {
-            Fields::Named(named) => Ok(Cow::Borrowed(&named.named)),
-            Fields::Unit => Ok(Cow::Owned(Punctuated::new())),
-            Fields::Unnamed(_) => Err(syn::Error::new_spanned(
-                &data.fields,
-                "`#[derive(Lenz)]` needs named fields, or none at all",
-            )),
-        },
-        _ => Err(syn::Error::new(
+/// A field a path can walk to.
+pub struct PathField<'a> {
+    /// What its marker and cursor method are called: the field's own
+    /// name, or `_0`, `_1` and on for a tuple struct's.
+    pub name: Ident,
+    /// How the struct reaches it: `source.name` or `source.0`.
+    pub member: Member,
+    pub field: &'a Field,
+}
+
+/// A struct's fields, named or numbered, of which a unit struct has
+/// none.
+pub fn fields(ast: &DeriveInput) -> syn::Result<Vec<PathField<'_>>> {
+    let Data::Struct(data) = &ast.data else {
+        return Err(syn::Error::new(
             Span::call_site(),
             "`#[derive(Lenz)]` only applies to structs",
-        )),
-    }
+        ));
+    };
+    let fields =
+        data.fields.iter().enumerate().map(|(index, field)| {
+            match &field.ident {
+                Some(ident) => PathField {
+                    name: ident.clone(),
+                    member: Member::Named(ident.clone()),
+                    field,
+                },
+                None => PathField {
+                    name: format_ident!("_{index}"),
+                    member: Member::Unnamed(Index::from(index)),
+                    field,
+                },
+            }
+        });
+    Ok(fields.collect())
 }
 
 /// The `T` of an `Option<T>`, if that is what this type is.
