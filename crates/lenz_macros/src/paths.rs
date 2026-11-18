@@ -3,13 +3,15 @@ use quote::{format_ident, quote};
 use syn::DeriveInput;
 
 use crate::common::{
-    fields, generics, ignored, lenz_root, option_inner, snake_case,
-    tag,
+    fields, generics, ignored, lenz_root, nested, option_inner,
+    snake_case, tag,
 };
 
 pub fn expand(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     let lenz = lenz_root(&ast.attrs)?;
     let name = &ast.ident;
+    let vis = &ast.vis;
+    let inner = nested(vis);
     let fields: Vec<_> = fields(ast)?
         .into_iter()
         .filter(|path| !ignored(path.field))
@@ -61,10 +63,10 @@ pub fn expand(ast: &DeriveInput) -> syn::Result<TokenStream2> {
         // impl below, so the declaration names nothing the module
         // would have to import.
         let declare = if idents.is_empty() {
-            quote!(pub struct #field_name;)
+            quote!(#inner struct #field_name;)
         } else {
             quote! {
-                pub struct #field_name<#(#idents),*>(
+                #inner struct #field_name<#(#idents),*>(
                     ::core::marker::PhantomData<
                         fn() -> (#(#idents,)*)
                     >,
@@ -130,8 +132,9 @@ pub fn expand(ast: &DeriveInput) -> syn::Result<TokenStream2> {
     }
 
     Ok(quote! {
-        #[allow(non_camel_case_types)]
-        pub mod #path_mod {
+        // Markers are only ever named, and a walk may use few of them.
+        #[allow(non_camel_case_types, dead_code)]
+        #vis mod #path_mod {
             #(#markers)*
         }
 
@@ -139,7 +142,8 @@ pub fn expand(ast: &DeriveInput) -> syn::Result<TokenStream2> {
 
         // The struct's parameters ride along, so that the impl below
         // constrains every one of them.
-        pub trait #cursor_trait<P, #decl> {
+        #[allow(dead_code)]
+        #vis trait #cursor_trait<P, #decl> {
             #(#signatures)*
         }
 
