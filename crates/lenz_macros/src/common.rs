@@ -255,16 +255,14 @@ pub fn nested(vis: &Visibility) -> TokenStream2 {
             let path = &restricted.path;
             let mut segments = path.segments.iter();
             match segments.next() {
-                Some(first)
-                    if first.ident == "crate"
-                        || path.leading_colon.is_some() =>
-                {
-                    quote!(pub(in #path))
-                }
                 Some(first) if first.ident == "self" => {
                     quote!(pub(in super #(::#segments)*))
                 }
-                _ => quote!(pub(in super::#path)),
+                Some(first) if first.ident == "super" => {
+                    quote!(pub(in super::#path))
+                }
+                // `crate`, `::` or, in Rust 2015, the crate root.
+                _ => quote!(pub(in #path)),
             }
         }
     }
