@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use syn::{
     Attribute, Data, DeriveInput, Field, GenericArgument,
     GenericParam, Ident, Index, Member, PathArguments, Type,
-    WhereClause,
+    Visibility, WhereClause,
 };
 
 /// A struct's generics, in the pieces the derive splices.
@@ -243,4 +243,27 @@ pub fn snake_case(ident: &Ident) -> String {
     }
 
     out
+}
+
+/// `vis` as written one module further in, so an item there is seen
+/// from as far as the struct is.
+pub fn nested(vis: &Visibility) -> TokenStream2 {
+    match vis {
+        Visibility::Public(_) => quote!(pub),
+        Visibility::Inherited => quote!(pub(super)),
+        Visibility::Restricted(restricted) => {
+            let path = &restricted.path;
+            let mut segments = path.segments.iter();
+            match segments.next() {
+                Some(first) if first.ident == "self" => {
+                    quote!(pub(in super #(::#segments)*))
+                }
+                Some(first) if first.ident == "super" => {
+                    quote!(pub(in super::#path))
+                }
+                // `crate`, `::` or, in Rust 2015, the crate root.
+                _ => quote!(pub(in #path)),
+            }
+        }
+    }
 }
